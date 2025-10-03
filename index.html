@@ -40,16 +40,33 @@
             </div>
 
             <div class="p-4 bg-gray-100 border-t flex flex-col gap-2 flex-shrink-0">
-                <input id="username" type="text" placeholder="Tên hiển thị (đã lưu)"
-                    class="px-3 py-2 rounded-lg border focus:ring-2 focus:ring-purple-400 outline-none" />
-                <div class="flex gap-2">
-                    <input id="message-input" type="text" placeholder="Nhập tin nhắn..."
-                        class="flex-1 px-3 py-2 rounded-lg border focus:ring-2 focus:ring-purple-400 outline-none" />
-                    <button id="send-button"
-                        class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow transition">
-                        Gửi
+
+                <div class="flex gap-2 items-center mb-2 p-2 bg-white rounded-lg shadow-sm border">
+                    <input id="room-id-input" type="text" placeholder="Nhập ID Phòng (ví dụ: private_101)"
+                        class="flex-1 px-3 py-2 rounded-lg border focus:ring-2 focus:ring-indigo-400 outline-none" />
+
+                    <button id="room-action-button"
+                        class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition">
+                        VÀO PHÒNG
                     </button>
                 </div>
+
+                <div id="message-controls" class="w-full">
+                    <input id="username" type="text" placeholder="Tên hiển thị (đã lưu)"
+                        class="w-full px-3 py-2 rounded-lg border focus:ring-2 focus:ring-purple-400 outline-none mb-2" />
+
+                    <div class="flex gap-2">
+                        <input id="message-input" type="text" placeholder="Nhập tin nhắn..."
+                            class="flex-1 px-3 py-2 rounded-lg border focus:ring-2 focus:ring-purple-400 outline-none"
+                            disabled />
+                        <button id="send-button"
+                            class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow transition"
+                            disabled>
+                            Gửi
+                        </button>
+                    </div>
+                </div>
+
                 <button id="logout-button"
                     class="text-xs text-gray-500 hover:text-red-500 transition duration-200 mt-2">
                     Đăng Xuất
