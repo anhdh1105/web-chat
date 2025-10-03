@@ -1,10 +1,12 @@
-
+// Import Firebase SDK (modular)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
 import { getDatabase, ref, push, onChildAdded, off } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js"; // THÊM createUserWithEmailAndPassword
 
 
-
+// =============================
+// BƯỚC 1: Cấu hình Firebase
+// =============================
 const firebaseConfig = {
     apiKey: "AIzaSyBC_zaWKozAN4gaRGFQs8Yfg6sSLjWczag", // <--- KHÓA CỦA BẠN
     authDomain: "webchatapp-e6e15.firebaseapp.com",
@@ -15,14 +17,16 @@ const firebaseConfig = {
     appId: "1:395339001651:web:e514a3b180ad92429b5846"
 };
 
-
+// Khởi tạo Firebase App, Database, và Auth
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const auth = getAuth(app);
 
+// Biến lưu trữ trạng thái
 let currentChatRef = null;
 let messageListener = null;
-let isRoomJoined = false; // TRẠNG THÁI MỚI: Đã tham gia phòng chưa
+let isRoomJoined = false;
+let isLoginMode = true; // TRẠNG THÁI MỚI: Theo dõi chế độ Login hay Sign Up
 
 // =============================
 // BƯỚC 2: DOM Elements
@@ -36,64 +40,124 @@ const chatScreen = document.getElementById('chat-screen');
 const logoutButton = document.getElementById('logout-button');
 const headerText = document.getElementById('header-text');
 
-// Room ID Element MỚI
+// Room Elements
 const roomIdInput = document.getElementById('room-id-input');
-const roomActionButton = document.getElementById('room-action-button'); // NÚT CHUYỂN ĐỔI
+const roomActionButton = document.getElementById('room-action-button');
 
-// Login Elements
+// Login/Sign Up Elements (ĐÃ ĐỔI TÊN ĐỂ TỔNG QUÁT HƠN)
 const loginScreen = document.getElementById('login-screen');
-const loginEmailInput = document.getElementById('login-email');
-const loginPasswordInput = document.getElementById('login-password');
-const loginButton = document.getElementById('login-button');
+const authTitle = document.getElementById('auth-title');
+const authEmailInput = document.getElementById('auth-email'); // Đổi tên từ login-email
+const authPasswordInput = document.getElementById('auth-password'); // Đổi tên từ login-password
+const authConfirmPasswordInput = document.getElementById('auth-confirm-password'); // MỚI
+const authActionButton = document.getElementById('auth-action-button'); // Đổi tên từ login-button
 const loginErrorText = document.getElementById('login-error');
+const toggleAuthModeButton = document.getElementById('toggle-auth-mode'); // Nút chuyển đổi
 
 // Lưu username và Room ID vào localStorage
 usernameInput.value = localStorage.getItem('chatUsername') || '';
-roomIdInput.value = localStorage.getItem('chatRoomId') || ''; // Bỏ default room
+roomIdInput.value = localStorage.getItem('chatRoomId') || '';
 
 usernameInput.addEventListener('change', () => {
     localStorage.setItem('chatUsername', usernameInput.value.trim());
 });
-roomIdInput.addEventListener('input', updateRoomUI); // Cập nhật UI ngay khi gõ
+roomIdInput.addEventListener('input', updateRoomUI);
+
 
 // =============================
-// BƯỚC 3: Logic Đăng nhập/Đăng xuất (Giữ nguyên)
+// BƯỚC 3: Logic Đăng nhập/Đăng ký/Đăng xuất
 // =============================
+
+/**
+ * Hàm chuyển đổi giữa chế độ Đăng nhập và Đăng ký
+ */
+function toggleAuthMode() {
+    isLoginMode = !isLoginMode;
+    loginErrorText.classList.add('hidden');
+
+    if (isLoginMode) {
+        authTitle.textContent = 'Đăng Nhập';
+        authActionButton.textContent = 'Đăng Nhập';
+        toggleAuthModeButton.textContent = 'Chưa có tài khoản? Chuyển sang Đăng ký';
+        authConfirmPasswordInput.classList.add('hidden');
+    } else {
+        authTitle.textContent = 'Đăng Ký Tài Khoản';
+        authActionButton.textContent = 'Đăng Ký';
+        toggleAuthModeButton.textContent = 'Đã có tài khoản? Quay lại Đăng nhập';
+        authConfirmPasswordInput.classList.remove('hidden');
+    }
+}
+
+/**
+ * Xử lý hành động Đăng nhập hoặc Đăng ký
+ */
+async function handleAuthAction() {
+    const email = authEmailInput.value.trim();
+    const password = authPasswordInput.value.trim();
+    loginErrorText.classList.add('hidden');
+
+    if (email === '' || password === '') {
+        loginErrorText.textContent = "Vui lòng nhập Email và Mật khẩu.";
+        loginErrorText.classList.remove('hidden');
+        return;
+    }
+
+    if (isLoginMode) {
+        // --- LOGIC ĐĂNG NHẬP (Đã có) ---
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            let errorMessage = "Đăng nhập thất bại. Kiểm tra Email/Mật khẩu.";
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                errorMessage = "Email hoặc mật khẩu không đúng.";
+            }
+            loginErrorText.textContent = errorMessage;
+            loginErrorText.classList.remove('hidden');
+        }
+
+    } else {
+        // --- LOGIC ĐĂNG KÝ (MỚI) ---
+        const confirmPassword = authConfirmPasswordInput.value.trim();
+
+        if (password !== confirmPassword) {
+            loginErrorText.textContent = "Mật khẩu xác nhận không khớp.";
+            loginErrorText.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            alert("Đăng ký thành công! Bạn đã được đăng nhập.");
+            // Tự động đăng nhập sau khi đăng ký thành công
+        } catch (error) {
+            let errorMessage = "Đăng ký thất bại.";
+            if (error.code === 'auth/email-already-in-use') {
+                errorMessage = "Email này đã được sử dụng.";
+            } else if (error.code === 'auth/weak-password') {
+                errorMessage = "Mật khẩu phải có ít nhất 6 ký tự.";
+            }
+            loginErrorText.textContent = errorMessage;
+            loginErrorText.classList.remove('hidden');
+        }
+    }
+}
+
 function handleAuthStateChange(user) {
     if (user) {
         loginScreen.classList.add('hidden');
         chatScreen.classList.remove('hidden');
         headerText.textContent = `💬 Chat với ${user.email}`;
-        updateRoomUI(); // Cập nhật trạng thái phòng khi đăng nhập
+        updateRoomUI();
     } else {
         chatScreen.classList.add('hidden');
         loginScreen.classList.remove('hidden');
         headerText.textContent = `💬 Đăng nhập để Chat`;
-    }
-}
-
-async function handleLogin() {
-    // ... (Giữ nguyên logic Login)
-    const email = loginEmailInput.value.trim();
-    const password = loginPasswordInput.value.trim();
-    loginErrorText.classList.add('hidden');
-
-    try {
-        await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-        let errorMessage = "Đăng nhập thất bại. Vui lòng kiểm tra Email/Mật khẩu.";
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-            errorMessage = "Email hoặc mật khẩu không đúng.";
-        }
-        loginErrorText.textContent = errorMessage;
-        loginErrorText.classList.remove('hidden');
+        toggleAuthMode(); // Đảm bảo bắt đầu ở chế độ Login
     }
 }
 
 async function handleLogout() {
-    // ... (Giữ nguyên logic Logout)
     try {
-        // Thoát phòng trước khi đăng xuất
         leaveRoom();
         await signOut(auth);
     } catch (error) {
@@ -101,27 +165,49 @@ async function handleLogout() {
     }
 }
 
+// ... (GIỮ NGUYÊN BƯỚC 4: Logic Quản lý Phòng và BƯỚC 5: Logic Gửi tin nhắn và BƯỚC 6: displayMessage) ...
+// (LƯU Ý: Do giới hạn độ dài, tôi sẽ chỉ giữ nguyên các hàm ở dưới đây và bạn sẽ dán chúng vào file script.js của mình)
+// -------------------------------------------------------------------------------------------------------------------
+// (Hàm updateRoomUI, joinRoom, leaveRoom, handleRoomAction, sendMessage, displayMessage đều được giữ nguyên)
+// -------------------------------------------------------------------------------------------------------------------
+
 // =============================
-// BƯỚC 4: Logic Quản lý Phòng
+// BƯỚC 7: Lắng nghe sự kiện
 // =============================
 
-/**
- * Cập nhật giao diện và trạng thái các nút dựa trên Room ID
- */
+onAuthStateChanged(auth, handleAuthStateChange);
+// Lắng nghe nút hành động chính
+authActionButton.addEventListener('click', handleAuthAction);
+// Lắng nghe nút chuyển đổi
+toggleAuthModeButton.addEventListener('click', toggleAuthMode);
+
+// Thêm lắng nghe Enter trên mật khẩu
+authPasswordInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleAuthAction();
+});
+
+logoutButton.addEventListener('click', handleLogout);
+roomActionButton.addEventListener('click', handleRoomAction);
+roomIdInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !isRoomJoined) {
+        handleRoomAction();
+    }
+});
+sendButton.addEventListener('click', sendMessage);
+messageInput.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') sendMessage();
+});
+
 function updateRoomUI() {
     const roomId = roomIdInput.value.trim();
 
     // Nếu chưa tham gia phòng
     if (!isRoomJoined) {
-        // Cho phép nhập Room ID
         roomIdInput.disabled = false;
-
-        // Hiển thị nút VÀO PHÒNG
         roomActionButton.textContent = 'VÀO PHÒNG';
         roomActionButton.classList.remove('bg-red-600', 'hover:bg-red-700');
         roomActionButton.classList.add('bg-purple-600', 'hover:bg-purple-700');
 
-        // Vô hiệu hóa controls chat nếu chưa nhập Room ID
         const canJoin = roomId !== '' && usernameInput.value.trim() !== '';
         roomActionButton.disabled = !canJoin;
 
@@ -135,45 +221,31 @@ function updateRoomUI() {
     } else {
         // Đã tham gia phòng
         roomIdInput.disabled = true;
-
-        // Hiển thị nút THOÁT PHÒNG
         roomActionButton.textContent = 'THOÁT PHÒNG';
         roomActionButton.classList.remove('bg-purple-600', 'hover:bg-purple-700');
         roomActionButton.classList.add('bg-red-600', 'hover:bg-red-700');
         roomActionButton.disabled = false;
 
-        // Kích hoạt controls chat
         messageInput.disabled = false;
         sendButton.disabled = false;
 
-        // Tên phòng hiển thị trên header (dù đã có email)
         headerText.textContent = `💬 Phòng: ${roomId}`;
     }
 }
 
-
-/**
- * Tham gia phòng chat
- */
 function joinRoom() {
     const roomId = roomIdInput.value.trim();
     if (roomId === '') return;
 
-    // Lưu Room ID
     localStorage.setItem('chatRoomId', roomId);
 
-    // 1. Dừng lắng nghe phòng chat cũ (nếu có)
     if (currentChatRef && messageListener) {
         off(currentChatRef, 'child_added', messageListener);
     }
 
-    // 2. Thiết lập tham chiếu mới
     currentChatRef = ref(database, `messages/${roomId}`);
-
-    // 3. Xóa tin nhắn cũ khỏi giao diện (để tải tin nhắn phòng mới)
     messagesContainer.innerHTML = '';
 
-    // 4. Lắng nghe tin nhắn mới và lưu hàm hủy lắng nghe
     messageListener = onChildAdded(currentChatRef, (snapshot) => {
         displayMessage(snapshot.val());
     });
@@ -183,25 +255,19 @@ function joinRoom() {
     messageInput.focus();
 }
 
-/**
- * Thoát phòng chat
- */
 function leaveRoom() {
-    // Dừng lắng nghe phòng chat hiện tại
     if (currentChatRef && messageListener) {
         off(currentChatRef, 'child_added', messageListener);
     }
     currentChatRef = null;
     messageListener = null;
 
-    // Xóa lịch sử chat khỏi giao diện
     messagesContainer.innerHTML = '<p class="text-center text-muted p-4">Bạn đã thoát phòng chat.</p>';
 
     isRoomJoined = false;
     updateRoomUI();
 }
 
-// Hàm xử lý khi nhấn nút VÀO/THOÁT
 function handleRoomAction() {
     if (isRoomJoined) {
         leaveRoom();
@@ -210,11 +276,7 @@ function handleRoomAction() {
     }
 }
 
-// =============================
-// BƯỚC 5: Logic Gửi Tin nhắn (Đã điều chỉnh)
-// =============================
 async function sendMessage() {
-    // ... (Giữ nguyên logic sendMessage)
     const username = usernameInput.value.trim();
     const message = messageInput.value.trim();
 
@@ -240,7 +302,6 @@ async function sendMessage() {
     }
 }
 
-// ... (Giữ nguyên logic displayMessage)
 function displayMessage(messageData) {
     const messageElement = document.createElement('div');
     const currentUsername = usernameInput.value.trim();
@@ -265,27 +326,22 @@ function displayMessage(messageData) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
+function startMessageListener() {
+    const roomId = roomIdInput.value.trim();
 
-// =============================
-// BƯỚC 6: Lắng nghe sự kiện
-// =============================
-
-onAuthStateChanged(auth, handleAuthStateChange);
-loginButton.addEventListener('click', handleLogin);
-loginPasswordInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') handleLogin();
-});
-logoutButton.addEventListener('click', handleLogout);
-
-// Lắng nghe sự kiện ROOM ACTION MỚI
-roomActionButton.addEventListener('click', handleRoomAction);
-roomIdInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !isRoomJoined) {
-        handleRoomAction();
+    if (roomId === '') {
+        messagesContainer.innerHTML = '<p class="text-center text-muted">Vui lòng nhập ID phòng chat để bắt đầu.</p>';
+        return;
     }
-});
 
-sendButton.addEventListener('click', sendMessage);
-messageInput.addEventListener('keypress', function (e) {
-    if (e.key === 'Enter') sendMessage();
-});
+    if (currentChatRef && messageListener) {
+        off(currentChatRef, 'child_added', messageListener);
+    }
+
+    currentChatRef = ref(database, `messages/${roomId}`);
+    messagesContainer.innerHTML = '';
+
+    messageListener = onChildAdded(currentChatRef, (snapshot) => {
+        displayMessage(snapshot.val());
+    });
+}
